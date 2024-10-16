@@ -1,34 +1,43 @@
-'use strict';
+var iterate    = require('./lib/iterate.js')
+  , initState  = require('./lib/state.js')
+  , terminator = require('./lib/terminator.js')
+  ;
 
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
+// Public API
+module.exports = parallel;
 
-var _isArrayLike = require('./isArrayLike.js');
+/**
+ * Runs iterator over provided array elements in parallel
+ *
+ * @param   {array|object} list - array or object (named list) to iterate over
+ * @param   {function} iterator - iterator to run
+ * @param   {function} callback - invoked when all elements processed
+ * @returns {function} - jobs terminator
+ */
+function parallel(list, iterator, callback)
+{
+  var state = initState(list);
 
-var _isArrayLike2 = _interopRequireDefault(_isArrayLike);
+  while (state.index < (state['keyedList'] || list).length)
+  {
+    iterate(list, iterator, state, function(error, result)
+    {
+      if (error)
+      {
+        callback(error, result);
+        return;
+      }
 
-var _wrapAsync = require('./wrapAsync.js');
+      // looks like it's the last one
+      if (Object.keys(state.jobs).length === 0)
+      {
+        callback(null, state.results);
+        return;
+      }
+    });
 
-var _wrapAsync2 = _interopRequireDefault(_wrapAsync);
+    state.index++;
+  }
 
-var _awaitify = require('./awaitify.js');
-
-var _awaitify2 = _interopRequireDefault(_awaitify);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-exports.default = (0, _awaitify2.default)((eachfn, tasks, callback) => {
-    var results = (0, _isArrayLike2.default)(tasks) ? [] : {};
-
-    eachfn(tasks, (task, key, taskCb) => {
-        (0, _wrapAsync2.default)(task)((err, ...result) => {
-            if (result.length < 2) {
-                [result] = result;
-            }
-            results[key] = result;
-            taskCb(err);
-        });
-    }, err => callback(err, results));
-}, 3);
-module.exports = exports['default'];
+  return terminator.bind(state, callback);
+}
